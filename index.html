@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Compliance Genie</title>
+    <meta name="description" content="Compliance Genie helps determine regulatory compliance, testing, and processes for new products." />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      // Tailwind config for custom theme shades and fonts
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                50: '#f3f7ff',
+                100: '#e6efff',
+                200: '#c7dcff',
+                300: '#a8c8ff',
+                400: '#6a9fff',
+                500: '#2f75ff',
+                600: '#1f5cdb',
+                700: '#1749ae',
+                800: '#123b8b',
+                900: '#0e2f70'
+              },
+              ink: {
+                50: '#f7f8fb',
+                100: '#eef1f6',
+                200: '#d8deea',
+                300: '#c0c9db',
+                400: '#98a7c0',
+                500: '#6f86a6',
+                600: '#53698a',
+                700: '#425570',
+                800: '#37465d',
+                900: '#2f3b4e'
+              }
+            },
+            boxShadow: {
+              'soft': '0 10px 30px -12px rgba(17, 24, 39, 0.25)'
+            }
+          }
+        }
+      };
+    </script>
+  </head>
+  <body class="min-h-screen bg-ink-50 text-ink-900 antialiased selection:bg-brand-200 selection:text-brand-900">
+    <div id="app" class="min-h-screen flex flex-col">
+      <!-- Header -->
+      <header class="sticky top-0 z-10 backdrop-blur bg-white/70 border-b border-ink-100">
+        <div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <!-- Simple wand/star SVG icon -->
+            <div class="w-9 h-9 rounded-xl bg-brand-600 text-white grid place-items-center shadow-soft">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3l1.9 3.9L18 9l-4.1 2.1L12 15l-1.9-3.9L6 9l4.1-2.1L12 3z" />
+                <path d="M19 19l-3-3" />
+              </svg>
+            </div>
+            <div>
+              <h1 class="text-xl font-bold tracking-tight">Compliance Genie</h1>
+              <p class="text-sm text-ink-600">Your guided path to product compliance</p>
+            </div>
+          </div>
+          <button id="resetButton" class="hidden sm:inline-flex items-center gap-2 text-sm font-medium text-ink-700 hover:text-brand-700 px-3 py-2 rounded-lg border border-ink-200 hover:border-brand-300 transition-colors">
+            <span>Reset</span>
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="1 4 1 10 7 10" />
+              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Main content container -->
+      <main class="flex-1">
+        <div class="max-w-4xl mx-auto p-4 sm:p-6 md:p-8">
+          <!-- Card -->
+          <div class="relative overflow-hidden rounded-2xl bg-white shadow-soft border border-ink-100">
+            <!-- Progress bar -->
+            <div class="h-2 bg-ink-100">
+              <div id="progressBar" class="h-full w-0 bg-gradient-to-r from-brand-400 to-brand-600 transition-all duration-500"></div>
+            </div>
+
+            <!-- Content wrapper -->
+            <section id="viewContainer" class="p-6 sm:p-8">
+              <!-- Views are rendered here dynamically -->
+            </section>
+          </div>
+
+          <!-- Footer helper text -->
+          <p class="text-xs text-ink-500 mt-4 text-center">
+            This is a proof-of-concept. Results are indicative and not legal advice.
+          </p>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      // -------------------------------
+      // Compliance Genie - Single File
+      // -------------------------------
+      // The app uses a single configuration object `FLOW` to define:
+      // - Questions and their options
+      // - Conditional branching via nextQuestionKey or resultsKey
+      // - Final results bundles for each path
+      // All state and rendering are handled with lightweight vanilla JS.
+
+      /**
+       * FLOW: central configuration for dynamic Q&A branching and results.
+       *
+       * Structure:
+       * {
+       *   meta: { title, description },
+       *   questions: {
+       *     [questionKey]: {
+       *       prompt: string,
+       *       helper?: string,
+       *       type: 'single', // kept extensible for future types
+       *       options: Array<{
+       *         label: string,
+       *         value: string,
+       *         nextQuestionKey?: string,
+       *         resultsKey?: string
+       *       }>
+       *     }
+       *   },
+       *   results: {
+       *     [resultsKey]: {
+       *       title: string,
+       *       requiredCertificates: string[],
+       *       mandatoryTesting: string[],
+       *       recommendedProcess: string[]
+       *     }
+       *   },
+       *   startQuestionKey: string
+       * }
+       */
+      const FLOW = {
+        meta: {
+          title: 'Compliance Genie',
+          description: 'A guided path to determine regulatory compliance, testing, and processes for your new product.'
+        },
+        questions: {
+          productType: {
+            prompt: 'What is the primary function of your product?',
+            helper: 'Choose the closest category to get tailored guidance.',
+            type: 'single',
+            options: [
+              { label: 'Medical Device', value: 'medical', nextQuestionKey: 'medical_intendedUse' },
+              { label: 'Consumer Electronics', value: 'consumer', nextQuestionKey: 'ce_wireless' },
+              { label: 'Industrial Equipment', value: 'industrial', nextQuestionKey: 'ind_environment' }
+            ]
+          },
+
+          // Medical branch
+          medical_intendedUse: {
+            prompt: 'Medical Device: What is the intended use?',
+            helper: 'Therapeutic, diagnostic, or monitoring?',
+            type: 'single',
+            options: [
+              { label: 'Diagnostic', value: 'diagnostic', nextQuestionKey: 'medical_patientContact' },
+              { label: 'Therapeutic', value: 'therapeutic', nextQuestionKey: 'medical_patientContact' },
+              { label: 'Monitoring', value: 'monitoring', nextQuestionKey: 'medical_patientContact' }
+            ]
+          },
+          medical_patientContact: {
+            prompt: 'Does the device contact the patient?',
+            helper: 'Skin, mucosal, invasive, or no patient contact.',
+            type: 'single',
+            options: [
+              { label: 'Non-contact', value: 'no_contact', nextQuestionKey: 'medical_power' },
+              { label: 'Skin contact / external', value: 'external', nextQuestionKey: 'medical_power' },
+              { label: 'Invasive or implanted', value: 'invasive', nextQuestionKey: 'medical_power' }
+            ]
+          },
+          medical_power: {
+            prompt: 'How is it powered?',
+            type: 'single',
+            options: [
+              { label: 'Mains powered', value: 'mains', nextQuestionKey: 'medical_wireless' },
+              { label: 'Battery powered', value: 'battery', nextQuestionKey: 'medical_wireless' }
+            ]
+          },
+          medical_wireless: {
+            prompt: 'Does it use wireless technology?',
+            type: 'single',
+            options: [
+              { label: 'Yes', value: 'yes', resultsKey: 'medical_with_wireless' },
+              { label: 'No', value: 'no', resultsKey: 'medical_basic' }
+            ]
+          },
+
+          // Consumer electronics branch
+          ce_wireless: {
+            prompt: 'Consumer Electronics: Does it use wireless technology?',
+            type: 'single',
+            options: [
+              { label: 'Yes', value: 'yes', nextQuestionKey: 'ce_region' },
+              { label: 'No', value: 'no', nextQuestionKey: 'ce_region' }
+            ]
+          },
+          ce_region: {
+            prompt: 'Primary market/region?',
+            helper: 'Select where you plan to sell first.',
+            type: 'single',
+            options: [
+              { label: 'United States', value: 'us', resultsKey: 'consumer_us' },
+              { label: 'European Union', value: 'eu', resultsKey: 'consumer_eu' },
+              { label: 'Global / Multiple', value: 'global', resultsKey: 'consumer_global' }
+            ]
+          },
+
+          // Industrial equipment branch
+          ind_environment: {
+            prompt: 'Industrial Equipment: Primary environment?',
+            type: 'single',
+            options: [
+              { label: 'Factory / Industrial', value: 'factory', nextQuestionKey: 'ind_power' },
+              { label: 'Commercial', value: 'commercial', nextQuestionKey: 'ind_power' }
+            ]
+          },
+          ind_power: {
+            prompt: 'Power characteristics?',
+            type: 'single',
+            options: [
+              { label: 'High voltage / 3-phase', value: 'high', resultsKey: 'industrial_heavy' },
+              { label: 'Low voltage / single-phase', value: 'low', resultsKey: 'industrial_light' }
+            ]
+          }
+        },
+        results: {
+          // Medical results
+          medical_basic: {
+            title: 'Medical Device (No Wireless)',
+            requiredCertificates: ['IEC 60601-1 (Basic safety)', 'IEC 60601-1-2 (EMC)', 'ISO 14971 (Risk management)'],
+            mandatoryTesting: ['Electrical safety', 'EMC (immunity and emissions)', 'Usability (IEC 62366)'],
+            recommendedProcess: ['Risk Management File', 'Essential Performance analysis', 'Clinical Evaluation Plan', 'Technical Documentation']
+          },
+          medical_with_wireless: {
+            title: 'Medical Device (With Wireless)',
+            requiredCertificates: ['IEC 60601-1', 'IEC 60601-1-2', 'IEC 60601-1-6/62366', 'Radio compliance (e.g., FCC/RED)'],
+            mandatoryTesting: ['Electrical safety', 'EMC', 'Wireless RF (SAR as applicable)', 'Software lifecycle (IEC 62304)'],
+            recommendedProcess: ['Risk Management File', 'Cybersecurity plan (FDA/IEC 81001-5-1 guidance)', 'Usability engineering file', 'Technical Documentation']
+          },
+
+          // Consumer electronics results
+          consumer_us: {
+            title: 'Consumer Electronics (US)',
+            requiredCertificates: ['FCC (Part 15 for unintentional/intentional radiators)', 'UL/IEC 62368-1 (Safety)'],
+            mandatoryTesting: ['EMC (FCC)', 'Safety (NRTL)', 'Wireless RF (if applicable)'],
+            recommendedProcess: ['User Manual & labeling (FCC/IC statements)', 'Compliance Folder', 'Factory QA plan']
+          },
+          consumer_eu: {
+            title: 'Consumer Electronics (EU)',
+            requiredCertificates: ['CE Marking', 'Low Voltage Directive (LVD) or 2014/35/EU', 'EMC Directive 2014/30/EU', 'RED 2014/53/EU (if wireless)'],
+            mandatoryTesting: ['EMC (EN standards)', 'Safety (EN 62368-1)', 'RF/Wireless (EN standards)'],
+            recommendedProcess: ['Declaration of Conformity', 'Technical File', 'WEEE/RoHS assessment', 'User instructions & labeling']
+          },
+          consumer_global: {
+            title: 'Consumer Electronics (Global)',
+            requiredCertificates: ['Regional EMC/Safety certifications (FCC, CE, UKCA, RCM, etc.)'],
+            mandatoryTesting: ['EMC (per region)', 'Safety (per region)', 'RF (per region)'],
+            recommendedProcess: ['Global labeling strategy', 'Market access planning', 'Technical File per region']
+          },
+
+          // Industrial equipment results
+          industrial_heavy: {
+            title: 'Industrial Equipment (Heavy duty)',
+            requiredCertificates: ['IEC/EN 60204-1 (Safety of machinery - Electrical)', 'EMC (EN 61000 series)', 'UL/CSA as applicable'],
+            mandatoryTesting: ['Electrical safety', 'EMC (industrial levels)', 'Functional safety if applicable (IEC 61508)'],
+            recommendedProcess: ['Risk assessment (ISO 12100)', 'Wiring diagrams & schematics', 'Maintenance & protective measures documentation']
+          },
+          industrial_light: {
+            title: 'Industrial Equipment (Light/Commercial)',
+            requiredCertificates: ['EN/IEC 61010-1 or 62368-1 (as applicable)', 'EMC (EN 61000 series)'],
+            mandatoryTesting: ['EMC (commercial levels)', 'Safety testing', 'Environmental tests as needed'],
+            recommendedProcess: ['Risk assessment', 'Technical File', 'Installation & operation manuals']
+          }
+        },
+        startQuestionKey: 'productType'
+      };
+
+      // -------------------------------
+      // App State
+      // -------------------------------
+      const state = {
+        screen: 'welcome', // 'welcome' | 'question' | 'results' | 'error'
+        answers: {}, // key -> selected option value
+        path: [], // ordered list of question keys visited
+        currentQuestionKey: null,
+        resultsKey: null
+      };
+
+      // -------------------------------
+      // Utility helpers
+      // -------------------------------
+      const byId = (id) => document.getElementById(id);
+      const viewContainer = () => byId('viewContainer');
+      const progressBar = () => byId('progressBar');
+
+      function clamp(num, min, max) { return Math.min(Math.max(num, min), max); }
+
+      function safeRun(fn) {
+        try { fn(); }
+        catch (error) {
+          console.error(error);
+          renderError('Something went wrong. Please reset and try again.');
+        }
+      }
+
+      // -------------------------------
+      // Rendering Functions
+      // -------------------------------
+      function render() {
+        if (state.screen === 'welcome') return renderWelcome();
+        if (state.screen === 'question') return renderQuestion();
+        if (state.screen === 'results') return renderResults();
+        return renderError('Unknown state.');
+      }
+
+      function renderWelcome() {
+        const container = viewContainer();
+        container.innerHTML = `
+          <div class="flex flex-col items-center text-center gap-6 animate-fade-in">
+            <div class="mt-2 inline-flex items-center gap-3 px-3 py-1 rounded-full bg-brand-50 text-brand-700 border border-brand-100">
+              <span class="text-lg">✨</span>
+              <span class="text-sm font-medium">Guided compliance assessment</span>
+            </div>
+            <h2 class="text-3xl sm:text-4xl font-bold tracking-tight">Welcome to Compliance Genie</h2>
+            <p class="max-w-2xl text-ink-700 leading-relaxed">
+              Answer a few quick questions and get a tailored list of required certificates, testing procedures, and recommended documentation for your product.
+            </p>
+            <button id="getStartedBtn" class="group relative inline-flex items-center gap-3 px-6 py-3 rounded-xl bg-brand-600 text-white hover:bg-brand-700 transition-colors shadow-soft">
+              <span>Get Started</span>
+              <svg class="w-4 h-4 transition-transform group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 12h14"/>
+                <path d="M12 5l7 7-7 7"/>
+              </svg>
+            </button>
+          </div>
+        `;
+        // reset progress bar
+        setProgress(0);
+        // attach handlers
+        byId('getStartedBtn').addEventListener('click', () => startFlow());
+      }
+
+      function renderQuestion() {
+        const container = viewContainer();
+        const qKey = state.currentQuestionKey;
+        const question = FLOW.questions[qKey];
+        if (!question) return renderError('Question not found.');
+
+        // Calculate progress: current step over total steps in path + remaining (best effort)
+        const totalStepsEstimate = state.path.length + 1; // simple, dynamic
+        const currentIndex = state.path.length; // 0-based count of answered questions
+        setProgress(currentIndex / totalStepsEstimate);
+
+        // Build options
+        const optionsHtml = question.options.map((opt, idx) => {
+          const isSelected = state.answers[qKey] === opt.value;
+          return `
+            <button data-value="${opt.value}" class="option-btn group flex items-center justify-between w-full text-left px-4 py-4 rounded-xl border ${isSelected ? 'border-brand-400 bg-brand-50' : 'border-ink-200 bg-white'} hover:border-brand-300 hover:bg-brand-50 transition-all">
+              <span class="font-medium text-ink-800">${opt.label}</span>
+              <svg class="w-5 h-5 text-ink-400 group-hover:text-brand-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            </button>
+          `;
+        }).join('');
+
+        container.innerHTML = `
+          <div class="space-y-6 animate-fade-in">
+            <div class="flex items-center justify-between">
+              <p class="text-sm text-ink-600">Step ${state.path.length + 1}</p>
+              <button id="backBtn" class="inline-flex items-center gap-2 text-sm text-ink-700 hover:text-brand-700 px-3 py-1.5 rounded-lg border border-ink-200 hover:border-brand-300 transition-colors ${state.path.length === 0 ? 'opacity-50 pointer-events-none' : ''}">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M19 12H5"/>
+                  <path d="M12 19l-7-7 7-7"/>
+                </svg>
+                <span>Back</span>
+              </button>
+            </div>
+            <div>
+              <h3 class="text-2xl font-semibold">${question.prompt}</h3>
+              ${question.helper ? `<p class="text-ink-700 mt-1">${question.helper}</p>` : ''}
+            </div>
+            <div class="grid gap-3">
+              ${optionsHtml}
+            </div>
+          </div>
+        `;
+
+        // Attach events
+        container.querySelectorAll('.option-btn').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            const value = e.currentTarget.getAttribute('data-value');
+            handleAnswer(qKey, value);
+          });
+        });
+        byId('backBtn').addEventListener('click', () => navigateBack());
+      }
+
+      function renderResults() {
+        const container = viewContainer();
+        const resultsKey = state.resultsKey;
+        const bundle = FLOW.results[resultsKey];
+        if (!bundle) return renderError('Results not found.');
+
+        setProgress(1);
+
+        function list(items) {
+          return items.map(item => `
+            <li class="flex items-start gap-3">
+              <span class="mt-1 inline-flex h-2 w-2 rounded-full bg-brand-500"></span>
+              <span>${item}</span>
+            </li>
+          `).join('');
+        }
+
+        container.innerHTML = `
+          <div class="space-y-8 animate-fade-in">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <h3 class="text-2xl font-semibold">${bundle.title}</h3>
+                <p class="text-ink-700 mt-1">Based on your answers, here is what you likely need:</p>
+              </div>
+              <button id="restartBtn" class="inline-flex items-center gap-2 text-sm text-ink-700 hover:text-brand-700 px-3 py-1.5 rounded-lg border border-ink-200 hover:border-brand-300 transition-colors">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="1 4 1 10 7 10" />
+                  <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                </svg>
+                <span>Start over</span>
+              </button>
+            </div>
+            <div class="grid sm:grid-cols-2 gap-6">
+              <div class="rounded-xl border border-ink-100 p-5 bg-ink-50/50">
+                <h4 class="font-semibold mb-3">Required Compliance Certificates</h4>
+                <ul class="space-y-2">${list(bundle.requiredCertificates)}</ul>
+              </div>
+              <div class="rounded-xl border border-ink-100 p-5 bg-ink-50/50">
+                <h4 class="font-semibold mb-3">Mandatory Testing Procedures</h4>
+                <ul class="space-y-2">${list(bundle.mandatoryTesting)}</ul>
+              </div>
+            </div>
+            <div class="rounded-xl border border-ink-100 p-5 bg-ink-50/50">
+              <h4 class="font-semibold mb-3">Recommended Process & Documentation</h4>
+              <ul class="space-y-2">${list(bundle.recommendedProcess)}</ul>
+            </div>
+            <div class="text-xs text-ink-600">
+              Note: This is a simplified guide for planning purposes only and not a substitute for a formal conformity assessment or legal counsel.
+            </div>
+          </div>
+        `;
+
+        byId('restartBtn').addEventListener('click', () => resetApp());
+      }
+
+      function renderError(message) {
+        const container = viewContainer();
+        setProgress(0);
+        container.innerHTML = `
+          <div class="flex flex-col items-center text-center gap-4 animate-fade-in">
+            <div class="w-12 h-12 rounded-xl bg-red-50 text-red-600 grid place-items-center border border-red-100">
+              <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12" y2="16" />
+              </svg>
+            </div>
+            <h3 class="text-xl font-semibold">Something went wrong</h3>
+            <p class="text-ink-700">${message}</p>
+            <button id="errorResetBtn" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-colors">
+              Reset
+            </button>
+          </div>
+        `;
+        byId('errorResetBtn').addEventListener('click', () => resetApp());
+      }
+
+      // -------------------------------
+      // Interaction Handlers
+      // -------------------------------
+      function setProgress(fraction) {
+        const widthPercent = clamp(Math.round(fraction * 100), 0, 100);
+        progressBar().style.width = widthPercent + '%';
+      }
+
+      function startFlow() {
+        state.screen = 'question';
+        state.path = [];
+        state.answers = {};
+        state.currentQuestionKey = FLOW.startQuestionKey;
+        state.resultsKey = null;
+        safeRun(render);
+        byId('resetButton').classList.remove('hidden');
+      }
+
+      function handleAnswer(questionKey, value) {
+        // Store answer and advance along the defined branch
+        state.answers[questionKey] = value;
+        if (!state.path.includes(questionKey)) state.path.push(questionKey);
+
+        const question = FLOW.questions[questionKey];
+        const selected = question.options.find(o => o.value === value);
+        if (!selected) return renderError('Invalid selection.');
+
+        if (selected.nextQuestionKey) {
+          state.currentQuestionKey = selected.nextQuestionKey;
+          state.screen = 'question';
+          safeRun(render);
+          return;
+        }
+        if (selected.resultsKey) {
+          state.resultsKey = selected.resultsKey;
+          state.screen = 'results';
+          safeRun(render);
+          return;
+        }
+        renderError('No next step defined for this option.');
+      }
+
+      function navigateBack() {
+        if (state.path.length === 0) {
+          // back to welcome
+          resetApp();
+          return;
+        }
+        // Remove last answered question and go to it
+        const lastKey = state.path[state.path.length - 1];
+        delete state.answers[lastKey];
+        state.path.pop();
+        state.currentQuestionKey = lastKey;
+        state.screen = 'question';
+        safeRun(render);
+      }
+
+      function resetApp() {
+        state.screen = 'welcome';
+        state.answers = {};
+        state.path = [];
+        state.currentQuestionKey = null;
+        state.resultsKey = null;
+        byId('resetButton').classList.add('hidden');
+        safeRun(render);
+      }
+
+      // -------------------------------
+      // Mount
+      // -------------------------------
+      document.addEventListener('DOMContentLoaded', () => {
+        // Minimal CSS animations via injected styles
+        const style = document.createElement('style');
+        style.textContent = `
+          .animate-fade-in { animation: fade-in 300ms ease-out both; }
+          @keyframes fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        `;
+        document.head.appendChild(style);
+
+        // global reset button
+        byId('resetButton').addEventListener('click', () => resetApp());
+
+        // initial render
+        safeRun(render);
+      });
+    </script>
+  </body>
+  </html>
+
